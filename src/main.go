@@ -34,10 +34,9 @@ func run(api *slack.Client) int {
 				log.Print("Hello, Event")
 
 			case *slack.MessageEvent:
-				text := ev.Text
-				if ev.Type == "message" && strings.HasPrefix(text, "<@"+botId+">") {
-					log.Printf("Message: %v\n", ev)
-					rtm.SendMessage(rtm.NewOutgoingMessage("Hello world", ev.Channel))
+				log.Printf("Message: %v\n", ev)
+				if ev.Type == "message" && strings.HasPrefix(ev.Text, "<@"+botId+">") {
+					commands(ev, api, rtm)
 				}
 
 			case *slack.InvalidAuthEvent:
@@ -45,6 +44,37 @@ func run(api *slack.Client) int {
 				return 1
 
 			}
+		}
+	}
+}
+
+func commands(ev *slack.MessageEvent, api *slack.Client, rtm *slack.RTM) {
+	user := ev.User
+	text := ev.Text
+	channel := ev.Channel
+
+	content := strings.TrimLeft(text, "<@"+botId+"> ")
+	if strings.HasPrefix(content, "hello") {
+		rtm.SendMessage(rtm.NewOutgoingMessage("Hello, " + user, ev.Channel))
+	} else if strings.HasPrefix(content, "list") {
+		channelInfo, err := api.GetChannelInfo(channel)
+		if err != nil {
+			rtm.SendMessage(rtm.NewOutgoingMessage("channel not found", channel))
+			return
+		}
+
+		var names []string
+		for _, v := range channelInfo.Members {
+			userProfile, err := api.GetUserProfile(v, true)
+			if err != nil {
+				log.Print(err)
+				return
+			}
+			names = append(names, userProfile.DisplayName)
+		}
+
+		for _, name := range names {
+			rtm.SendMessage(rtm.NewOutgoingMessage(name, channel))
 		}
 	}
 }
