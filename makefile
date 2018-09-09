@@ -14,8 +14,7 @@ fmt:
 		@go fmt
 
 .PHONY: test
-test:
-		fmt build run
+test: fmt build run
 
 .PHONY: clean
 clean:
