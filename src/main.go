@@ -5,6 +5,7 @@ import (
 	"github.com/nlopes/slack"
 	"io/ioutil"
 	"log"
+	"math/rand"
 	"os"
 	"strings"
 )
@@ -57,26 +58,51 @@ func commands(ev *slack.MessageEvent, api *slack.Client, rtm *slack.RTM) {
 	if strings.HasPrefix(content, "hello") {
 		rtm.SendMessage(rtm.NewOutgoingMessage("Hello, " + user, ev.Channel))
 	} else if strings.HasPrefix(content, "list") {
-		channelInfo, err := api.GetChannelInfo(channel)
+		list := getMembersList(api, rtm, channel)
+		str := strings.Join(list, "\n")
+		rtm.SendMessage(rtm.NewOutgoingMessage(str, channel))
+	} else if strings.HasPrefix(content, "kuji") {
+		list := getMembersList(api, rtm, channel)
+		shuffle(list)
+		rtm.SendMessage(rtm.NewOutgoingMessage(list[0], channel))
+	}
+}
+
+func shuffle(data []string) {
+	n := len(data)
+	for i := n-1; i >= 0; i-- {
+		j := rand.Intn(i + 1)
+		data[i], data[j] = data[j], data[i]
+	}
+}
+
+func getMembersList(api *slack.Client, rtm *slack.RTM, channel string) []string {
+	channelInfo, err := api.GetChannelInfo(channel)
+	if err != nil {
+		log.Print(err)
+		rtm.SendMessage(rtm.NewOutgoingMessage("channel not found", channel))
+		return []string{}
+	}
+
+	var names []string
+	for _, v := range channelInfo.Members {
+		userInfo, err := api.GetUserInfo(v)
 		if err != nil {
-			rtm.SendMessage(rtm.NewOutgoingMessage("channel not found", channel))
-			return
+			log.Print(err)
+			return []string{}
 		}
 
-		var names []string
-		for _, v := range channelInfo.Members {
-			userProfile, err := api.GetUserProfile(v, true)
-			if err != nil {
-				log.Print(err)
-				return
-			}
-			names = append(names, userProfile.DisplayName)
+		if userInfo.IsBot {
+			continue
 		}
 
-		for _, name := range names {
-			rtm.SendMessage(rtm.NewOutgoingMessage(name, channel))
+		if userInfo.Profile.DisplayName == "" {
+			names = append(names, userInfo.Profile.RealName)
+		} else {
+			names = append(names, userInfo.Profile.DisplayName)
 		}
 	}
+	return names
 }
 
 func main() {
